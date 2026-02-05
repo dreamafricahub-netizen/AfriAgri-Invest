@@ -18,6 +18,7 @@ model User {
   phone           String?   // Important for MoMo
   city            String?
   role            String    @default("USER") // USER, ADMIN
+  status          String    @default("ACTIVE") // ACTIVE, BANNED, SUSPENDED
   balance         Float     @default(3000) // Welcome bonus
   investedCapital Float     @default(0)
   referralCode    String    @unique

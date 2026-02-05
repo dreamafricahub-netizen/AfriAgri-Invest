@@ -24,6 +24,7 @@ const navItems = [
     { href: '/admin/users', label: 'Utilisateurs', icon: Users },
     { href: '/admin/investments', label: 'Investissements', icon: TrendingUp },
     { href: '/admin/transactions', label: 'Transactions', icon: CreditCard },
+    { href: '/admin/deposits', label: 'Depots', icon: CreditCard },
     { href: '/admin/withdrawals', label: 'Retraits', icon: ArrowDownToLine },
     { href: '/admin/settings', label: 'Parametres', icon: Settings },
 ];

@@ -195,9 +195,9 @@ export default function AdminUsersPage() {
 
                                                 {selectedUser?.id === user.id && (
                                                     <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl z-10 overflow-hidden">
-                                                        <button className="w-full px-4 py-3 text-left text-sm text-white hover:bg-zinc-700 flex items-center gap-2">
+                                                        <a href={`/admin/users/${user.id}`} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-zinc-700 flex items-center gap-2">
                                                             <Eye className="w-4 h-4" /> Voir details
-                                                        </button>
+                                                        </a>
                                                         {user.role === 'ADMIN' ? (
                                                             <button
                                                                 onClick={() => handleRemoveAdmin(user.id)}
