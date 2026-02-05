@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String?
+  phone           String?   // Important for MoMo
+  city            String?
+  role            String    @default("USER") // USER, ADMIN
+  balance         Float     @default(3000) // Welcome bonus
+  investedCapital Float     @default(0)
+  referralCode    String    @unique
+  referredBy      String?   // referralCode of the person who referred this user
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  investments   Investment[]
+  transactions  Transaction[]
+  referrals     Referral[]    @relation("Sponsor")
+  referredUser  Referral?     @relation("Referred")
+}
+
+model Investment {
+  id            String    @id @default(cuid())
+  userId        String
+  packId        Int       // ID from our static packs
+  amount        Float
+  dailyRate     Float     // e.g., 0.035 for 3.5%
+  createdAt     DateTime  @default(now())
+  lastGainDate  DateTime  @default(now())
+  status        String    @default("ACTIVE") // ACTIVE, COMPLETED
+
+  user          User      @relation(fields: [userId], references: [id])
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  userId        String
+  type          String    // DEPOSIT, WITHDRAWAL, INVESTMENT, GAIN, REFERRAL_BONUS
+  amount        Float
+  status        String    @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  method        String?   // MOMO, ORANGE, WAVE
+  reference     String?   // External transaction ID
+  description   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id])
+}
+
+model Referral {
+  id            String    @id @default(cuid())
+  sponsorId     String    // User who referred
+  referredId    String    @unique // User who was referred
+  totalInvested Float     @default(0) // Total invested by referred user
+  totalBonus    Float     @default(0) // Total bonus earned by sponsor from this referral
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sponsor       User      @relation("Sponsor", fields: [sponsorId], references: [id])
+  referred      User      @relation("Referred", fields: [referredId], references: [id])
+}
