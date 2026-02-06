@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
+import { PACKS } from '@/utils/packs';
 
 export async function GET(req: Request) {
     try {
@@ -28,7 +29,15 @@ export async function GET(req: Request) {
                 type: 'DEPOSIT',
                 status: status === 'ALL' ? undefined : status,
             },
-            include: {
+            select: {
+                id: true,
+                amount: true,
+                status: true,
+                method: true,
+                reference: true,
+                proofImage: true,
+                packId: true,
+                createdAt: true,
                 user: {
                     select: {
                         id: true,
@@ -86,17 +95,109 @@ export async function PUT(req: Request) {
         }
 
         if (action === 'APPROVE') {
-            // Credit the user and mark as completed
-            await prisma.$transaction([
-                prisma.transaction.update({
-                    where: { id: transactionId },
-                    data: { status: 'COMPLETED' }
-                }),
-                prisma.user.update({
+            // Get pack info if packId exists
+            const pack = transaction.packId ? PACKS.find(p => p.id === transaction.packId) : null;
+
+            // Mark deposit as completed
+            await prisma.transaction.update({
+                where: { id: transactionId },
+                data: { status: 'COMPLETED' }
+            });
+
+            if (pack) {
+                // Create investment for the user
+                // Set lastGainDate to 25 hours ago so harvest is available immediately
+                const yesterday = new Date(Date.now() - 25 * 60 * 60 * 1000);
+                await prisma.investment.create({
+                    data: {
+                        userId: transaction.userId,
+                        packId: pack.id,
+                        amount: pack.price,
+                        dailyRate: 0.035, // 3.5%
+                        status: 'ACTIVE',
+                        lastGainDate: yesterday,
+                    },
+                });
+
+                // Update user's invested capital (not balance - the deposit amount goes to investment)
+                await prisma.user.update({
+                    where: { id: transaction.userId },
+                    data: {
+                        investedCapital: {
+                            increment: pack.price,
+                        },
+                        // Add any bonus to balance (for USDT deposits, transaction.amount includes the bonus)
+                        balance: {
+                            increment: transaction.amount - pack.price, // The bonus part goes to balance
+                        },
+                    },
+                });
+
+                // Create investment transaction record
+                await prisma.transaction.create({
+                    data: {
+                        userId: transaction.userId,
+                        type: 'INVESTMENT',
+                        amount: pack.price,
+                        status: 'COMPLETED',
+                        description: `Investissement - ${pack.name}`,
+                    },
+                });
+
+                // Handle referral bonus (10% to sponsor)
+                if (transaction.user.referredBy) {
+                    const sponsor = await prisma.user.findUnique({
+                        where: { referralCode: transaction.user.referredBy },
+                    });
+
+                    if (sponsor) {
+                        const bonus = Math.floor(pack.price * 0.10); // 10% bonus
+
+                        // Update sponsor balance
+                        await prisma.user.update({
+                            where: { id: sponsor.id },
+                            data: {
+                                balance: {
+                                    increment: bonus,
+                                },
+                            },
+                        });
+
+                        // Update referral stats
+                        await prisma.referral.updateMany({
+                            where: {
+                                sponsorId: sponsor.id,
+                                referredId: transaction.userId,
+                            },
+                            data: {
+                                totalInvested: {
+                                    increment: pack.price,
+                                },
+                                totalBonus: {
+                                    increment: bonus,
+                                },
+                            },
+                        });
+
+                        // Create bonus transaction for sponsor
+                        await prisma.transaction.create({
+                            data: {
+                                userId: sponsor.id,
+                                type: 'REFERRAL_BONUS',
+                                amount: bonus,
+                                status: 'COMPLETED',
+                                description: `Bonus parrainage de ${transaction.user.name || 'un filleul'}`,
+                            },
+                        });
+                    }
+                }
+            } else {
+                // No pack - just credit the balance (for regular deposits)
+                await prisma.user.update({
                     where: { id: transaction.userId },
                     data: { balance: { increment: transaction.amount } }
-                })
-            ]);
+                });
+            }
         } else {
             // Mark as failed
             await prisma.transaction.update({

@@ -8,7 +8,10 @@ import {
     Clock,
     Phone,
     Mail,
-    AlertCircle
+    AlertCircle,
+    Wallet,
+    Smartphone,
+    Copy
 } from 'lucide-react';
 
 interface Withdrawal {
@@ -16,6 +19,7 @@ interface Withdrawal {
     amount: number;
     status: string;
     method: string | null;
+    withdrawAddress: string | null;
     createdAt: string;
     user: {
         id: string;
@@ -30,6 +34,13 @@ export default function AdminWithdrawalsPage() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('PENDING');
     const [processing, setProcessing] = useState<string | null>(null);
+    const [copied, setCopied] = useState<string | null>(null);
+
+    const copyToClipboard = (text: string, id: string) => {
+        navigator.clipboard.writeText(text);
+        setCopied(id);
+        setTimeout(() => setCopied(null), 2000);
+    };
 
     const fetchWithdrawals = async () => {
         setLoading(true);
@@ -198,10 +209,47 @@ export default function AdminWithdrawalsPage() {
                                 </div>
                             </div>
 
+                            {/* Withdrawal Address Info */}
+                            <div className="mt-4 p-4 bg-zinc-800 rounded-xl">
+                                <div className="flex items-center gap-3 mb-2">
+                                    {withdrawal.method === 'USDT' ? (
+                                        <div className="w-8 h-8 bg-green-900/50 rounded-lg flex items-center justify-center">
+                                            <Wallet className="w-4 h-4 text-green-400" />
+                                        </div>
+                                    ) : (
+                                        <div className="w-8 h-8 bg-yellow-900/50 rounded-lg flex items-center justify-center">
+                                            <Smartphone className="w-4 h-4 text-yellow-400" />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-xs text-zinc-400">
+                                            {withdrawal.method === 'USDT' ? 'Adresse USDT TRC20' : 'Numero Mobile Money'}
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <code className="text-white font-mono text-sm">
+                                                {withdrawal.withdrawAddress || withdrawal.user.phone || 'Non renseigne'}
+                                            </code>
+                                            {withdrawal.withdrawAddress && (
+                                                <button
+                                                    onClick={() => copyToClipboard(withdrawal.withdrawAddress!, withdrawal.id)}
+                                                    className="p-1 hover:bg-zinc-700 rounded"
+                                                >
+                                                    {copied === withdrawal.id ? (
+                                                        <CheckCircle className="w-4 h-4 text-green-400" />
+                                                    ) : (
+                                                        <Copy className="w-4 h-4 text-zinc-400" />
+                                                    )}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             {withdrawal.status === 'PENDING' && (
-                                <div className="mt-4 p-3 bg-amber-900/20 border border-amber-800/50 rounded-xl flex items-center gap-2 text-amber-400 text-sm">
+                                <div className="mt-3 p-3 bg-amber-900/20 border border-amber-800/50 rounded-xl flex items-center gap-2 text-amber-400 text-sm">
                                     <AlertCircle className="w-4 h-4 shrink-0" />
-                                    <span>Verifiez le numero Mobile Money avant de valider : <strong>{withdrawal.user.phone || 'Non renseigne'}</strong></span>
+                                    <span>Verifiez l'adresse/numero avant de valider le retrait!</span>
                                 </div>
                             )}
                         </div>

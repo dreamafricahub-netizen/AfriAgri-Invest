@@ -6,6 +6,7 @@ export interface Pack {
   total30Days: number;
   profit30Days: number;
   message: string;
+  icon: string;
 }
 
 // Updated Rate: 3.5% daily.
@@ -20,7 +21,8 @@ export const PACKS: Pack[] = [
     dailyGain: 105,
     total30Days: 8420,
     profit30Days: 5420,
-    message: "Débute ton aventure agricole"
+    message: "Debute ton aventure agricole",
+    icon: "🌱"
   },
   {
     id: 2,
@@ -29,7 +31,8 @@ export const PACKS: Pack[] = [
     dailyGain: 350,
     total30Days: 28060,
     profit30Days: 18060,
-    message: "Une production locale solide"
+    message: "Une production locale solide",
+    icon: "🌱"
   },
   {
     id: 3,
@@ -38,7 +41,8 @@ export const PACKS: Pack[] = [
     dailyGain: 875,
     total30Days: 70160,
     profit30Days: 45160,
-    message: "L'agriculture commence à payer"
+    message: "L'agriculture commence a payer",
+    icon: "🌳"
   },
   {
     id: 4,
@@ -47,7 +51,8 @@ export const PACKS: Pack[] = [
     dailyGain: 1750,
     total30Days: 140330,
     profit30Days: 90330,
-    message: "Des revenus quotidiens sérieux"
+    message: "Des revenus quotidiens serieux",
+    icon: "🌳"
   },
   {
     id: 5,
@@ -56,7 +61,8 @@ export const PACKS: Pack[] = [
     dailyGain: 3500,
     total30Days: 280670,
     profit30Days: 180670,
-    message: "Modernisation et expansion"
+    message: "Modernisation et expansion",
+    icon: "🏡"
   },
   {
     id: 6,
@@ -65,7 +71,8 @@ export const PACKS: Pack[] = [
     dailyGain: 7000,
     total30Days: 561340,
     profit30Days: 361340,
-    message: "Production à grande échelle"
+    message: "Production a grande echelle",
+    icon: "🏡"
   },
   {
     id: 7,
@@ -74,7 +81,8 @@ export const PACKS: Pack[] = [
     dailyGain: 10500,
     total30Days: 842000,
     profit30Days: 542000,
-    message: "Le géant de l'agrobusiness"
+    message: "Le geant de l'agrobusiness",
+    icon: "🌾"
   },
   {
     id: 8,
@@ -83,6 +91,7 @@ export const PACKS: Pack[] = [
     dailyGain: 17500,
     total30Days: 1403350,
     profit30Days: 903350,
-    message: "Le sommet de la réussite"
+    message: "Le sommet de la reussite",
+    icon: "🏰"
   }
 ];

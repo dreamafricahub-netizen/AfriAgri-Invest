@@ -46,18 +46,21 @@ model Investment {
 }
 
 model Transaction {
-  id            String    @id @default(cuid())
-  userId        String
-  type          String    // DEPOSIT, WITHDRAWAL, INVESTMENT, GAIN, REFERRAL_BONUS
-  amount        Float
-  status        String    @default("COMPLETED") // PENDING, COMPLETED, FAILED
-  method        String?   // MOMO, ORANGE, WAVE
-  reference     String?   // External transaction ID
-  description   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  userId          String
+  type            String    // DEPOSIT, WITHDRAW, INVESTMENT, GAIN, REFERRAL_BONUS
+  amount          Float
+  status          String    @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  method          String?   // MOMO, USDT
+  reference       String?   // External transaction ID
+  description     String?
+  proofImage      String?   // Screenshot proof for deposits
+  packId          Int?      // Pack ID for deposit (must match exact amount)
+  withdrawAddress String?   // USDT address or MoMo number for withdrawals
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  user          User      @relation(fields: [userId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
 }
 
 model Referral {
@@ -71,4 +74,11 @@ model Referral {
 
   sponsor       User      @relation("Sponsor", fields: [sponsorId], references: [id])
   referred      User      @relation("Referred", fields: [referredId], references: [id])
+}
+
+model Settings {
+  id            String    @id @default(cuid())
+  key           String    @unique
+  value         String
+  updatedAt     DateTime  @updatedAt
 }

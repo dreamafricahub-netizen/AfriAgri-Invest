@@ -109,12 +109,12 @@ export function useUserData() {
         }
     };
 
-    const withdraw = async (amount: number, method: string = 'MOMO') => {
+    const withdraw = async (amount: number, method: string = 'MOMO', address?: string) => {
         try {
             const res = await fetch('/api/withdraw', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount, method }),
+                body: JSON.stringify({ amount, method, address }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -127,6 +127,24 @@ export function useUserData() {
         }
     };
 
+    const deposit = async (amount: number, method: string = 'MOMO', proofImage?: string, packId?: number) => {
+        try {
+            const res = await fetch('/api/deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount, method, proofImage, packId }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.message);
+            }
+            await fetchUserData(); // Refresh data
+            return { success: true, message: data.message, bonus: data.bonus };
+        } catch (err: any) {
+            return { success: false, message: err.message };
+        }
+    };
+
     return {
         userData,
         loading,
@@ -134,6 +152,7 @@ export function useUserData() {
         refetch: fetchUserData,
         invest,
         withdraw,
+        deposit,
         isAuthenticated: status === 'authenticated',
     };
 }

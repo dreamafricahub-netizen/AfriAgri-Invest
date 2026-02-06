@@ -10,7 +10,9 @@ import {
     Activity,
     UserPlus,
     Loader2,
-    RefreshCw
+    RefreshCw,
+    Play,
+    CheckCircle
 } from 'lucide-react';
 
 interface Stats {
@@ -30,6 +32,10 @@ export default function AdminDashboard() {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [processingGains, setProcessingGains] = useState(false);
+    const [gainsResult, setGainsResult] = useState<{ processed: number; amount: number } | null>(null);
+    const [resettingFarms, setResettingFarms] = useState(false);
+    const [resetResult, setResetResult] = useState<string | null>(null);
 
     const fetchStats = async () => {
         try {
@@ -51,6 +57,43 @@ export default function AdminDashboard() {
     const handleRefresh = () => {
         setRefreshing(true);
         fetchStats();
+    };
+
+    const handleProcessGains = async () => {
+        setProcessingGains(true);
+        setGainsResult(null);
+        try {
+            const res = await fetch('/api/cron/daily-gains', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setGainsResult({
+                    processed: data.processedInvestments,
+                    amount: data.totalGainsDistributed
+                });
+                // Refresh stats after processing
+                fetchStats();
+            }
+        } catch (error) {
+            console.error('Failed to process gains:', error);
+        } finally {
+            setProcessingGains(false);
+        }
+    };
+
+    const handleResetFarms = async () => {
+        setResettingFarms(true);
+        setResetResult(null);
+        try {
+            const res = await fetch('/api/admin/reset-farms', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setResetResult(data.message);
+            }
+        } catch (error) {
+            console.error('Failed to reset farms:', error);
+        } finally {
+            setResettingFarms(false);
+        }
     };
 
     if (loading) {
@@ -151,6 +194,64 @@ export default function AdminDashboard() {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Process Daily Gains */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-lg font-bold text-white">Gains Journaliers</h2>
+                        <p className="text-zinc-400 text-sm">Crediter les gains des investissements actifs</p>
+                    </div>
+                    <button
+                        onClick={handleProcessGains}
+                        disabled={processingGains}
+                        className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50"
+                    >
+                        {processingGains ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                            <Play className="w-5 h-5" />
+                        )}
+                        Distribuer les gains
+                    </button>
+                </div>
+                {gainsResult && (
+                    <div className="mt-4 p-4 bg-green-900/20 border border-green-800 rounded-xl flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                        <div>
+                            <p className="text-green-400 font-bold">Gains distribues avec succes!</p>
+                            <p className="text-green-300 text-sm">
+                                {gainsResult.processed} investissement(s) traite(s) - {gainsResult.amount.toLocaleString()} F distribues
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Reset Farms Button */}
+                <div className="mt-4 pt-4 border-t border-zinc-700 flex items-center justify-between">
+                    <div>
+                        <p className="text-sm text-zinc-400">Reinitialiser les fermes</p>
+                        <p className="text-xs text-zinc-500">Rendre toutes les fermes prates a recolter</p>
+                    </div>
+                    <button
+                        onClick={handleResetFarms}
+                        disabled={resettingFarms}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                    >
+                        {resettingFarms ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <RefreshCw className="w-4 h-4" />
+                        )}
+                        Reinitialiser
+                    </button>
+                </div>
+                {resetResult && (
+                    <div className="mt-2 p-3 bg-amber-900/20 border border-amber-800 rounded-xl">
+                        <p className="text-amber-400 text-sm">{resetResult}</p>
+                    </div>
+                )}
             </div>
 
             {/* Quick Actions */}

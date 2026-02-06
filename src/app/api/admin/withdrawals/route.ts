@@ -25,7 +25,7 @@ export async function GET(req: Request) {
 
         const withdrawals = await prisma.transaction.findMany({
             where: {
-                type: 'WITHDRAWAL',
+                type: { in: ['WITHDRAW', 'WITHDRAWAL'] },
                 status: status === 'ALL' ? undefined : status,
             },
             include: {

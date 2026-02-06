@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { PACKS } from '@/utils/packs';
 
+// This endpoint is now disabled for regular users
+// Investments are created when admin approves a deposit
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);
@@ -15,9 +17,23 @@ export async function POST(req: Request) {
             );
         }
 
-        const { packId } = await req.json();
+        // Check if user is admin
+        const user = await prisma.user.findUnique({
+            where: { email: session.user.email },
+            select: { role: true }
+        });
 
-        // Find pack
+        // Only admins can directly create investments (for manual operations)
+        if (user?.role !== 'ADMIN') {
+            return NextResponse.json(
+                { message: 'Pour investir, veuillez effectuer un depot via la page Investir.' },
+                { status: 403 }
+            );
+        }
+
+        // Admin can still create investments directly if needed
+        const { packId, userId } = await req.json();
+
         const pack = PACKS.find(p => p.id === packId);
         if (!pack) {
             return NextResponse.json(
@@ -26,12 +42,11 @@ export async function POST(req: Request) {
             );
         }
 
-        // Get user
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
+        const targetUser = await prisma.user.findUnique({
+            where: { id: userId },
         });
 
-        if (!user) {
+        if (!targetUser) {
             return NextResponse.json(
                 { message: 'Utilisateur non trouve' },
                 { status: 404 }
@@ -41,17 +56,17 @@ export async function POST(req: Request) {
         // Create investment
         const investment = await prisma.investment.create({
             data: {
-                userId: user.id,
+                userId: targetUser.id,
                 packId: pack.id,
                 amount: pack.price,
-                dailyRate: 0.035, // 3.5%
+                dailyRate: 0.035,
                 status: 'ACTIVE',
             },
         });
 
         // Update user's invested capital
         await prisma.user.update({
-            where: { id: user.id },
+            where: { id: targetUser.id },
             data: {
                 investedCapital: {
                     increment: pack.price,
@@ -59,67 +74,8 @@ export async function POST(req: Request) {
             },
         });
 
-        // Create transaction
-        await prisma.transaction.create({
-            data: {
-                userId: user.id,
-                type: 'INVESTMENT',
-                amount: pack.price,
-                status: 'COMPLETED',
-                description: `Investissement - ${pack.name}`,
-            },
-        });
-
-        // Handle referral bonus (10% to sponsor)
-        if (user.referredBy) {
-            const sponsor = await prisma.user.findUnique({
-                where: { referralCode: user.referredBy },
-            });
-
-            if (sponsor) {
-                const bonus = Math.floor(pack.price * 0.10); // 10% bonus
-
-                // Update sponsor balance
-                await prisma.user.update({
-                    where: { id: sponsor.id },
-                    data: {
-                        balance: {
-                            increment: bonus,
-                        },
-                    },
-                });
-
-                // Update referral stats
-                await prisma.referral.updateMany({
-                    where: {
-                        sponsorId: sponsor.id,
-                        referredId: user.id,
-                    },
-                    data: {
-                        totalInvested: {
-                            increment: pack.price,
-                        },
-                        totalBonus: {
-                            increment: bonus,
-                        },
-                    },
-                });
-
-                // Create bonus transaction for sponsor
-                await prisma.transaction.create({
-                    data: {
-                        userId: sponsor.id,
-                        type: 'REFERRAL_BONUS',
-                        amount: bonus,
-                        status: 'COMPLETED',
-                        description: `Bonus parrainage de ${user.name || 'un filleul'}`,
-                    },
-                });
-            }
-        }
-
         return NextResponse.json({
-            message: 'Investissement reussi',
+            message: 'Investissement cree',
             investment,
         });
     } catch (error) {
