@@ -48,3 +48,8 @@ next-env.d.ts
 # database
 *.db
 *.db-journal
+
+# AI assistants
+.claude/
+.gemini/
+.cursor/
