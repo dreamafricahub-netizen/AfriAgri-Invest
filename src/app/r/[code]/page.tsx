@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
-export default function ReferralRedirectPage({ params }: { params: { code: string } }) {
-    redirect(`/auth/register?ref=${params.code}`);
+export default async function ReferralRedirectPage({ params }: { params: Promise<{ code: string }> }) {
+    const { code } = await params;
+    redirect(`/auth/register?ref=${code}`);
 }
