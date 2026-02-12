@@ -98,8 +98,78 @@ export async function GET(req: Request) {
     }
 }
 
-// POST method for admin manual trigger
+// POST method for admin manual trigger (no CRON_SECRET needed)
 export async function POST(req: Request) {
-    // Redirect to GET handler
-    return GET(req);
+    try {
+        const now = new Date();
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        const investments = await prisma.investment.findMany({
+            where: {
+                status: 'ACTIVE',
+                lastGainDate: {
+                    lt: oneDayAgo
+                }
+            },
+            include: {
+                user: {
+                    select: { id: true, name: true, email: true }
+                }
+            }
+        });
+
+        let processedCount = 0;
+        let totalGainsDistributed = 0;
+
+        for (const investment of investments) {
+            const pack = PACKS.find(p => p.id === investment.packId);
+            if (!pack) continue;
+
+            const dailyGain = pack.dailyGain;
+            const timeDiff = now.getTime() - new Date(investment.lastGainDate).getTime();
+            const daysDue = Math.floor(timeDiff / (24 * 60 * 60 * 1000));
+
+            if (daysDue < 1) continue;
+
+            const daysToProcess = Math.min(daysDue, 7);
+            const totalGain = dailyGain * daysToProcess;
+
+            await prisma.$transaction([
+                prisma.user.update({
+                    where: { id: investment.userId },
+                    data: { balance: { increment: totalGain } }
+                }),
+                prisma.transaction.create({
+                    data: {
+                        userId: investment.userId,
+                        type: 'GAIN',
+                        amount: totalGain,
+                        status: 'COMPLETED',
+                        description: daysToProcess > 1
+                            ? `Gains de ${daysToProcess} jours - ${pack.name}`
+                            : `Gain journalier - ${pack.name}`
+                    }
+                }),
+                prisma.investment.update({
+                    where: { id: investment.id },
+                    data: { lastGainDate: now }
+                })
+            ]);
+
+            processedCount++;
+            totalGainsDistributed += totalGain;
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: `Traitement termine`,
+            processedInvestments: processedCount,
+            totalGainsDistributed,
+            timestamp: now.toISOString()
+        });
+
+    } catch (error) {
+        console.error('Daily gains processing error:', error);
+        return NextResponse.json({ message: 'Erreur serveur' }, { status: 500 });
+    }
 }

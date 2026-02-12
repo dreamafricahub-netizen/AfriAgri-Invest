@@ -34,6 +34,7 @@ export default function AdminDashboard() {
     const [refreshing, setRefreshing] = useState(false);
     const [processingGains, setProcessingGains] = useState(false);
     const [gainsResult, setGainsResult] = useState<{ processed: number; amount: number } | null>(null);
+    const [gainsError, setGainsError] = useState<string | null>(null);
     const [resettingFarms, setResettingFarms] = useState(false);
     const [resetResult, setResetResult] = useState<string | null>(null);
 
@@ -62,6 +63,7 @@ export default function AdminDashboard() {
     const handleProcessGains = async () => {
         setProcessingGains(true);
         setGainsResult(null);
+        setGainsError(null);
         try {
             const res = await fetch('/api/cron/daily-gains', { method: 'POST' });
             const data = await res.json();
@@ -70,11 +72,12 @@ export default function AdminDashboard() {
                     processed: data.processedInvestments,
                     amount: data.totalGainsDistributed
                 });
-                // Refresh stats after processing
                 fetchStats();
+            } else {
+                setGainsError(data.message || `Erreur ${res.status}`);
             }
         } catch (error) {
-            console.error('Failed to process gains:', error);
+            setGainsError('Erreur de connexion au serveur');
         } finally {
             setProcessingGains(false);
         }
@@ -225,6 +228,12 @@ export default function AdminDashboard() {
                                 {gainsResult.processed} investissement(s) traite(s) - {gainsResult.amount.toLocaleString()} F distribues
                             </p>
                         </div>
+                    </div>
+                )}
+                {gainsError && (
+                    <div className="mt-4 p-4 bg-red-900/20 border border-red-800 rounded-xl flex items-center gap-3">
+                        <Activity className="w-5 h-5 text-red-400" />
+                        <p className="text-red-400 font-medium">{gainsError}</p>
                     </div>
                 )}
 
