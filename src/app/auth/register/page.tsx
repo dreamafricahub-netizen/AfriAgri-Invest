@@ -1,14 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Leaf, Loader2, Shield, Users, TrendingUp, CheckCircle2, Sprout } from 'lucide-react';
 import { LiveTicker } from '@/components/auth/LiveTicker';
 
 export default function RegisterPage() {
+    return (
+        <Suspense>
+            <RegisterContent />
+        </Suspense>
+    );
+}
+
+function RegisterContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const referralCode = searchParams.get('ref');
     const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '' });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -25,7 +35,7 @@ export default function RegisterPage() {
             const res = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({ ...formData, referredBy: referralCode || undefined }),
             });
             if (!res.ok) {
                 const data = await res.json();
@@ -237,6 +247,11 @@ export default function RegisterPage() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            {referralCode && (
+                                <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm rounded-xl text-center font-medium border border-green-200 dark:border-green-800">
+                                    Tu as ete invite par un parrain ! Code : <span className="font-bold">{referralCode}</span>
+                                </div>
+                            )}
                             {error && (
                                 <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 text-sm rounded-xl text-center font-medium">{error}</div>
                             )}
