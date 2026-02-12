@@ -21,7 +21,7 @@ export default function ParrainagePage() {
     }
 
     const referralCode = referralData?.referralCode || 'INVITE00';
-    const referralLink = `https://afriagri-invest.com/r/${referralCode}`;
+    const referralLink = `https://afriagriinvest.vercel.app/r/${referralCode}`;
     const filleuls = referralData?.filleuls || [];
     const stats = referralData?.stats || {
         totalFilleuls: 0,

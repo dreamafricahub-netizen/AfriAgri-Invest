@@ -14,7 +14,7 @@ export default function ProfilPage() {
     const [copied, setCopied] = useState(false);
 
     const referralCode = userData?.referralCode || '';
-    const referralLink = `https://afriagri-invest.com/r/${referralCode}`;
+    const referralLink = `https://afriagriinvest.vercel.app/r/${referralCode}`;
 
     const handleCopyLink = async () => {
         try {
