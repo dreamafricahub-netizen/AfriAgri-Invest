@@ -103,7 +103,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         </div>
                         <div>
                             <h1 className="font-bold text-white">Admin Panel</h1>
-                            <p className="text-xs text-zinc-500">AfriAgri Invest</p>
+                            <p className="text-xs text-zinc-500">ZooFoot</p>
                         </div>
                     </div>
                 </div>
