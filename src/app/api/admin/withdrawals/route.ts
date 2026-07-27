@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
+import { settleWithdrawal, rejectWithdrawal } from '@/lib/ledger';
 
 export async function GET(req: Request) {
     try {
@@ -86,23 +87,31 @@ export async function PUT(req: Request) {
         }
 
         if (action === 'APPROVE') {
-            // Mark as completed
+            // Le versement sort les fonds de l'encaisse : le decouvert y est
+            // interdit, donc approuver un retrait non couvert echoue ici.
+            await settleWithdrawal({
+                amountMinor: BigInt(Math.round(transaction.amount)),
+                provider: transaction.method === 'USDT' ? 'usdt' : 'momo',
+                requestRef: transaction.id,
+            });
+
             await prisma.transaction.update({
                 where: { id: transactionId },
                 data: { status: 'COMPLETED' }
             });
         } else {
-            // Refund the user
-            await prisma.$transaction([
-                prisma.transaction.update({
-                    where: { id: transactionId },
-                    data: { status: 'FAILED' }
-                }),
-                prisma.user.update({
-                    where: { id: transaction.userId },
-                    data: { balance: { increment: transaction.amount } }
-                })
-            ]);
+            // Refus : les fonds immobilises retournent au portefeuille.
+            await rejectWithdrawal({
+                userId: transaction.userId,
+                amountMinor: BigInt(Math.round(transaction.amount)),
+                requestRef: transaction.id,
+                reason: 'Refuse par un administrateur',
+            });
+
+            await prisma.transaction.update({
+                where: { id: transactionId },
+                data: { status: 'FAILED' }
+            });
         }
 
         return NextResponse.json({ success: true });

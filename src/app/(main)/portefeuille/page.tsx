@@ -4,7 +4,23 @@ import { ArrowDownLeft, ArrowUpRight, Wallet, TrendingUp, Shield, CreditCard, Lo
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserData } from '@/hooks/useUserData';
-import { PACKS } from '@/utils/packs';
+/**
+ * Montants de depot proposes, en francs.
+ *
+ * Ce ne sont que des raccourcis : le depot n'achete rien et ne declenche aucun
+ * rendement. Il credite le portefeuille, et le joueur decide ensuite de ce
+ * qu'il mise.
+ */
+const DEPOSIT_AMOUNTS = [
+    { id: 1, price: 1000, name: '1 000 F' },
+    { id: 2, price: 2000, name: '2 000 F' },
+    { id: 3, price: 5000, name: '5 000 F' },
+    { id: 4, price: 10000, name: '10 000 F' },
+    { id: 5, price: 25000, name: '25 000 F' },
+    { id: 6, price: 50000, name: '50 000 F' },
+    { id: 7, price: 100000, name: '100 000 F' },
+    { id: 8, price: 200000, name: '200 000 F' },
+];
 
 interface DepositSettings {
     USDT_ADDRESS: string;
@@ -58,22 +74,21 @@ export default function PortfolioPage() {
     }
 
     const balance = userData?.balance || 0;
-    const investedCapital = userData?.investedCapital || 0;
-    const investments = userData?.investments || [];
+        const bets = userData?.bets || [];
     const transactions = userData?.transactions || [];
 
-    const totalValue = balance + investedCapital;
+    const totalValue = balance;
     const totalGains = transactions.filter(t => t.type === 'GAIN' || t.type === 'REFERRAL_BONUS').reduce((sum, t) => sum + t.amount, 0);
     const totalInvested = transactions.filter(t => t.type === 'INVESTMENT').reduce((sum, t) => sum + t.amount, 0);
 
-    const hasInvested = investments.length > 0;
+    const hasPlacedBet = bets.length > 0;
 
     const handleWithdraw = async () => {
         setActionError('');
         const amount = parseFloat(withdrawAmount);
 
-        if (!hasInvested) {
-            setActionError("Vous devez d'abord investir dans un pack agricole avant de pouvoir effectuer un retrait.");
+        if (!hasPlacedBet) {
+            setActionError("Vous devez avoir place au moins un pari avant de pouvoir effectuer un retrait.");
             return;
         }
         if (!amount || amount < 3000) {
@@ -141,7 +156,7 @@ export default function PortfolioPage() {
             return;
         }
 
-        const pack = PACKS.find(p => p.id === selectedPack);
+        const pack = DEPOSIT_AMOUNTS.find(p => p.id === selectedPack);
         if (!pack) return;
 
         setIsProcessing(true);
@@ -178,7 +193,7 @@ export default function PortfolioPage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const selectedPackData = selectedPack ? PACKS.find(p => p.id === selectedPack) : null;
+    const selectedPackData = selectedPack ? DEPOSIT_AMOUNTS.find(p => p.id === selectedPack) : null;
     const bonusAmount = selectedPackData && depositMethod === 'USDT'
         ? Math.floor(selectedPackData.price * parseFloat(settings.USDT_BONUS_PERCENT) / 100)
         : 0;
@@ -210,7 +225,7 @@ export default function PortfolioPage() {
                                 setActionSuccess('');
                                 setShowWithdrawModal(true);
                             }}
-                            className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors active:scale-95 ${hasInvested ? 'bg-agri-green hover:bg-green-600 text-white' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}
+                            className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors active:scale-95 ${hasPlacedBet ? 'bg-agri-green hover:bg-green-600 text-white' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}
                         >
                             <ArrowUpRight className="w-4 h-4" /> Retirer
                         </button>
@@ -226,9 +241,9 @@ export default function PortfolioPage() {
                             <ArrowDownLeft className="w-4 h-4" /> Depot
                         </button>
                     </div>
-                    {!hasInvested && (
+                    {!hasPlacedBet && (
                         <p className="text-amber-400 text-xs text-center mt-3 flex items-center justify-center gap-1">
-                            <span>&#9888;</span> Investis dans un pack pour debloquer le retrait
+                            <span>&#9888;</span> Placez un pari pour debloquer le retrait
                         </p>
                     )}
                 </div>
@@ -240,8 +255,8 @@ export default function PortfolioPage() {
                     <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-full flex items-center justify-center mb-2">
                         <Wallet className="w-5 h-5" />
                     </div>
-                    <p className="text-zinc-500 text-xs">Capital Investi</p>
-                    <p className="font-bold text-lg">{investedCapital.toLocaleString()} F</p>
+                    <p className="text-zinc-500 text-xs">Paris en cours</p>
+                    <p className="font-bold text-lg">{bets.length}</p>
                 </div>
                 <div className="p-4 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800">
                     <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 text-green-600 rounded-full flex items-center justify-center mb-2">
@@ -265,33 +280,6 @@ export default function PortfolioPage() {
                     <p className="font-bold text-lg text-green-600">+{totalGains.toLocaleString()} F</p>
                 </div>
             </div>
-
-            {/* Active Farms Summary */}
-            {investments.length > 0 && (
-                <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800">
-                    <h3 className="font-bold mb-3 flex items-center gap-2">
-                        <span className="text-lg">🌾</span> Mes Fermes Actives
-                    </h3>
-                    <div className="space-y-2">
-                        {investments.map((investment) => {
-                            const pack = PACKS.find(p => p.id === investment.packId);
-                            const icons = ['🌱', '🌱', '🌳', '🌳', '🏡', '🏡', '🌾', '🏰'];
-                            return (
-                                <div key={investment.id} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-2xl">{icons[investment.packId - 1] || '🌱'}</span>
-                                        <div>
-                                            <p className="font-bold text-sm">{pack?.name || `Pack ${investment.packId}`}</p>
-                                            <p className="text-[10px] text-zinc-500">Active - {investment.amount.toLocaleString()} F</p>
-                                        </div>
-                                    </div>
-                                    <span className="text-xs font-bold text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-full">+3.5%/j</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
 
             {/* Transactions */}
             <div>
@@ -466,7 +454,7 @@ export default function PortfolioPage() {
 
                                     <button
                                         onClick={handleWithdraw}
-                                        disabled={isProcessing || !hasInvested}
+                                        disabled={isProcessing || !hasPlacedBet}
                                         className="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                                     >
                                         {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowUpRight className="w-5 h-5" />}
@@ -560,21 +548,21 @@ export default function PortfolioPage() {
                                         </div>
                                     )}
 
-                                    {/* Step 2: Choose pack */}
+                                    {/* Etape 2 : montant */}
                                     {depositStep === 2 && (
                                         <div className="space-y-4">
                                             <button onClick={() => setDepositStep(1)} className="text-sm text-zinc-500 hover:text-white">
                                                 ← Retour
                                             </button>
 
-                                            <p className="text-zinc-500 text-sm">Selectionnez le pack a acheter</p>
+                                            <p className="text-zinc-500 text-sm">Choisissez le montant a deposer</p>
                                             <p className="text-amber-500 text-xs flex items-center gap-1">
                                                 <AlertTriangle className="w-3 h-3" />
-                                                Deposez le montant EXACT du pack choisi
+                                                Deposez exactement le montant choisi
                                             </p>
 
                                             <div className="space-y-2 max-h-60 overflow-y-auto">
-                                                {PACKS.map(pack => (
+                                                {DEPOSIT_AMOUNTS.map(pack => (
                                                     <button
                                                         key={pack.id}
                                                         onClick={() => setSelectedPack(pack.id)}
@@ -585,7 +573,6 @@ export default function PortfolioPage() {
                                                         }`}
                                                     >
                                                         <div className="flex items-center gap-3">
-                                                            <span className="text-xl">{pack.icon}</span>
                                                             <div className="text-left">
                                                                 <p className="font-bold text-sm">{pack.name}</p>
                                                                 <p className="text-xs text-zinc-500">{pack.price.toLocaleString()} F</p>

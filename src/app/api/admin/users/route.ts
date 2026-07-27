@@ -45,12 +45,11 @@ export async function GET(req: Request) {
                     city: true,
                     role: true,
                     balance: true,
-                    investedCapital: true,
                     referralCode: true,
                     createdAt: true,
                     _count: {
                         select: {
-                            investments: true,
+                            bets: true,
                             transactions: true,
                             referrals: true,
                         }

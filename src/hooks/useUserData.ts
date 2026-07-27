@@ -3,13 +3,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 
-interface Investment {
+interface Bet {
     id: string;
-    packId: number;
-    amount: number;
-    dailyRate: number;
-    createdAt: string;
-    status: string;
+    stakeMinor: string;
+    oddsMilli: number;
+    potentialWinMinor: string;
+    status: 'OPEN' | 'WON' | 'LOST' | 'VOID';
+    placedAt: string;
+    selections: { homeGoals: number; awayGoals: number }[];
+    fixture: { homeTeam: string; awayTeam: string; kickoffAt: string };
 }
 
 interface Transaction {
@@ -38,10 +40,11 @@ interface UserData {
     name: string;
     phone: string;
     city: string;
+    /** Solde calcule depuis le registre, pas depuis la colonne User.balance. */
     balance: number;
-    investedCapital: number;
     referralCode: string;
-    investments: Investment[];
+    /** Paris en cours. */
+    bets: Bet[];
     transactions: Transaction[];
     referralCount: number;
     activeReferrals: number;

@@ -47,18 +47,21 @@ export default function ProfilPage() {
         );
     }
 
-    const investedCapital = userData?.investedCapital || 0;
-    const investments = userData?.investments || [];
+    const bets = userData?.bets || [];
     const referralCount = userData?.referralCount || 0;
 
-    // Calculate investor level
+    // Niveau fonde sur l'anciennete de jeu, pas sur les sommes engagees.
+    //
+    // Un palier indexe sur l'argent mise recompense la depense et pousse a
+    // miser davantage pour « monter ». C'est exactement ce qu'une mesure de jeu
+    // responsable interdit de mettre en avant.
+    const placedBets = bets.length;
     let level = "Debutant";
     let levelColor = "text-zinc-500";
     let levelBg = "bg-zinc-100 dark:bg-zinc-800";
-    if (investedCapital >= 10000) { level = "Fermier"; levelColor = "text-green-600"; levelBg = "bg-green-50 dark:bg-green-900/20"; }
-    if (investedCapital >= 50000) { level = "Exploitant"; levelColor = "text-blue-600"; levelBg = "bg-blue-50 dark:bg-blue-900/20"; }
-    if (investedCapital >= 200000) { level = "Agro-Expert"; levelColor = "text-purple-600"; levelBg = "bg-purple-50 dark:bg-purple-900/20"; }
-    if (investedCapital >= 500000) { level = "Magnat"; levelColor = "text-amber-600"; levelBg = "bg-amber-50 dark:bg-amber-900/20"; }
+    if (placedBets >= 10) { level = "Habitue"; levelColor = "text-green-600"; levelBg = "bg-green-50 dark:bg-green-900/20"; }
+    if (placedBets >= 50) { level = "Regulier"; levelColor = "text-blue-600"; levelBg = "bg-blue-50 dark:bg-blue-900/20"; }
+    if (placedBets >= 200) { level = "Fidele"; levelColor = "text-purple-600"; levelBg = "bg-purple-50 dark:bg-purple-900/20"; }
 
     return (
         <div className="p-4 space-y-6 pb-8">
@@ -80,8 +83,8 @@ export default function ProfilPage() {
             <div className="grid grid-cols-3 gap-3">
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
                     className="p-3 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 text-center">
-                    <p className="text-lg font-black text-zinc-800 dark:text-zinc-100">{investments.length}</p>
-                    <p className="text-[10px] text-zinc-400">Fermes</p>
+                    <p className="text-lg font-black text-zinc-800 dark:text-zinc-100">{bets.length}</p>
+                    <p className="text-[10px] text-zinc-400">Paris en cours</p>
                 </motion.div>
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
                     className="p-3 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 text-center">

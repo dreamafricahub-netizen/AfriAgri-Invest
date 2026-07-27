@@ -14,8 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AfriAgri Invest",
-  description: "Investis dans l'agriculture virtuelle",
+  title: "ZooFoot — Pari inversé",
+  description:
+    "Écartez les scores qui n'arriveront pas. Marge affichée sur chaque pari, " +
+    "résultats des matchs virtuels scellés avant l'ouverture des paris.",
 };
 
 export const viewport: Viewport = {

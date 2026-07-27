@@ -24,53 +24,65 @@ export async function GET() {
         // Get stats
         const [
             totalUsers,
-            totalInvestments,
+            totalBets,
             totalTransactions,
             pendingWithdrawals,
             users,
-            investments,
-            transactions
+            bets,
+            walletSum,
+            openBetsSum,
+            ggrSum
         ] = await Promise.all([
             prisma.user.count(),
-            prisma.investment.count(),
+            prisma.bet.count(),
             prisma.transaction.count(),
-            prisma.transaction.count({ where: { type: 'WITHDRAWAL', status: 'PENDING' } }),
-            prisma.user.findMany({
-                select: { balance: true, investedCapital: true, createdAt: true }
+            prisma.transaction.count({ where: { type: 'WITHDRAW', status: 'PENDING' } }),
+            prisma.user.findMany({ select: { createdAt: true } }),
+            prisma.bet.findMany({
+                select: { stakeMinor: true, status: true, placedAt: true }
             }),
-            prisma.investment.findMany({
-                select: { amount: true, createdAt: true }
+            // Les soldes viennent du registre, pas de la colonne User.balance.
+            prisma.ledgerEntry.aggregate({
+                where: { account: { kind: 'USER_WALLET' } },
+                _sum: { amountMinor: true },
             }),
-            prisma.transaction.findMany({
-                where: { type: { in: ['GAIN', 'REFERRAL_BONUS'] } },
-                select: { amount: true }
-            })
+            prisma.ledgerEntry.aggregate({
+                where: { account: { kind: 'UNSETTLED_BETS' } },
+                _sum: { amountMinor: true },
+            }),
+            prisma.ledgerEntry.aggregate({
+                where: { account: { kind: 'REVENUE' } },
+                _sum: { amountMinor: true },
+            }),
         ]);
 
-        const totalBalance = users.reduce((sum, u) => sum + u.balance, 0);
-        const totalInvestedCapital = users.reduce((sum, u) => sum + u.investedCapital, 0);
-        const totalGainsPaid = transactions.reduce((sum, t) => sum + t.amount, 0);
+        // Comptes de passif et de produit : solde = oppose de la somme.
+        const totalBalance = Number(-(walletSum._sum.amountMinor ?? BigInt(0)));
+        const openExposure = Number(-(openBetsSum._sum.amountMinor ?? BigInt(0)));
+        const grossGamingRevenue = Number(-(ggrSum._sum.amountMinor ?? BigInt(0)));
 
-        // Users registered today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const newUsersToday = users.filter(u => new Date(u.createdAt) >= today).length;
 
-        // Investments today
-        const investmentsToday = investments.filter(i => new Date(i.createdAt) >= today);
-        const investmentsTodayAmount = investmentsToday.reduce((sum, i) => sum + i.amount, 0);
+        const betsToday = bets.filter(b => new Date(b.placedAt) >= today);
+        const stakedToday = betsToday.reduce((sum, b) => sum + Number(b.stakeMinor), 0);
+        const openBets = bets.filter(b => b.status === 'OPEN').length;
 
         return NextResponse.json({
             totalUsers,
             newUsersToday,
-            totalInvestments,
+            totalBets,
+            openBets,
             totalTransactions,
             pendingWithdrawals,
             totalBalance,
-            totalInvestedCapital,
-            totalGainsPaid,
-            investmentsTodayCount: investmentsToday.length,
-            investmentsTodayAmount,
+            /** Mises engagees dont le resultat est inconnu — l'exposition du livre. */
+            openExposure,
+            /** Produit brut des jeux. Peut etre negatif : un livre perd certains jours. */
+            grossGamingRevenue,
+            betsTodayCount: betsToday.length,
+            stakedToday,
         });
     } catch (error) {
         console.error('Admin stats error:', error);

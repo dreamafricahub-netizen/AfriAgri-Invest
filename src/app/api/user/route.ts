@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
+import { getUserBalance } from '@/lib/ledger';
 
 // GET user data
 export async function GET() {
@@ -18,9 +19,15 @@ export async function GET() {
         const user = await prisma.user.findUnique({
             where: { email: session.user.email },
             include: {
-                investments: {
-                    where: { status: 'ACTIVE' },
-                    orderBy: { createdAt: 'desc' },
+                bets: {
+                    where: { status: 'OPEN' },
+                    orderBy: { placedAt: 'desc' },
+                    include: {
+                        selections: { select: { homeGoals: true, awayGoals: true } },
+                        fixture: {
+                            select: { homeTeam: true, awayTeam: true, kickoffAt: true },
+                        },
+                    },
                 },
                 transactions: {
                     orderBy: { createdAt: 'desc' },
@@ -51,11 +58,17 @@ export async function GET() {
         // Calculate total gains from referrals
         const totalReferralBonus = user.referrals.reduce((sum, r) => sum + r.totalBonus, 0);
 
+        // Le solde vient du registre, pas de la colonne User.balance.
+        // C'est desormais la seule source de verite : il est calcule depuis les
+        // ecritures, chacune ayant une contrepartie identifiee.
+        const ledgerBalance = await getUserBalance(user.id);
+
         // Remove password
         const { password: _, ...userWithoutPassword } = user;
 
         return NextResponse.json({
             ...userWithoutPassword,
+            balance: Number(ledgerBalance),
             totalReferralBonus,
             referralCount: user.referrals.length,
             activeReferrals: user.referrals.filter(r => r.totalInvested > 0).length,

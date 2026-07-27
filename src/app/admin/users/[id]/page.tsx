@@ -22,7 +22,6 @@ import {
     Copy
 } from 'lucide-react';
 import Link from 'next/link';
-import { PACKS } from '@/utils/packs';
 
 interface UserDetail {
     id: string;
@@ -37,7 +36,7 @@ interface UserDetail {
     referralCode: string;
     referredBy: string | null;
     createdAt: string;
-    investments: any[];
+    bets: any[];
     transactions: any[];
 }
 
@@ -408,31 +407,28 @@ export default function AdminUserDetailPage() {
                 </div>
             )}
 
-            {/* Investments */}
-            {user.investments.length > 0 && (
+            {/* Paris */}
+            {user.bets && user.bets.length > 0 && (
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-                    <h3 className="font-bold text-white mb-4">Investissements ({user.investments.length})</h3>
+                    <h3 className="font-bold text-white mb-4">Paris ({user.bets.length})</h3>
                     <div className="space-y-2">
-                        {user.investments.map((inv: any) => {
-                            const pack = PACKS.find(p => p.id === inv.packId);
-                            return (
-                                <div key={inv.id} className="flex items-center justify-between p-3 bg-zinc-800 rounded-xl">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-2xl">
-                                            {[1, 2].includes(inv.packId) ? '🌱' :
-                                             [3, 4].includes(inv.packId) ? '🌳' :
-                                             [5, 6].includes(inv.packId) ? '🏡' :
-                                             inv.packId === 7 ? '🌾' : '🏰'}
-                                        </span>
-                                        <div>
-                                            <p className="text-white font-medium">{pack?.name || `Pack ${inv.packId}`}</p>
-                                            <p className="text-xs text-zinc-500">{new Date(inv.createdAt).toLocaleDateString('fr-FR')}</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-green-400 font-bold">{inv.amount.toLocaleString()} F</p>
+                        {user.bets.map((bet: any) => (
+                            <div key={bet.id} className="flex items-center justify-between p-3 bg-zinc-800 rounded-xl">
+                                <div>
+                                    <p className="text-white font-medium text-sm">
+                                        {bet.fixture.homeTeam} — {bet.fixture.awayTeam}
+                                    </p>
+                                    <p className="text-xs text-zinc-500">
+                                        {bet.selections.map((s: any) => `${s.homeGoals}-${s.awayGoals}`).join(' · ')}
+                                        {' · cote '}{(bet.oddsMilli / 1000).toFixed(2)}
+                                    </p>
                                 </div>
-                            );
-                        })}
+                                <div className="text-right">
+                                    <p className="text-white font-bold">{Number(bet.stakeMinor).toLocaleString()} F</p>
+                                    <p className="text-xs text-zinc-500">{bet.status}</p>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}

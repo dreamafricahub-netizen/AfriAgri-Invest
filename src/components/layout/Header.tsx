@@ -8,16 +8,16 @@ export function Header() {
     const { userData, loading } = useUserData();
 
     const balance = userData?.balance || 0;
-    const investedCapital = userData?.investedCapital || 0;
-    const totalValue = balance + investedCapital;
+    const totalValue = balance;
+    const openBets = userData?.bets?.length || 0;
 
     return (
         <header className="sticky top-0 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-40 px-4 py-3">
             <div className="flex justify-between items-center max-w-5xl mx-auto">
                 <div className="flex flex-col">
-                    <h1 className="text-lg font-bold text-agri-green tracking-tight">AfriAgri Invest</h1>
+                    <h1 className="text-lg font-bold text-agri-green tracking-tight">ZooFoot</h1>
                     <span className="text-xs text-zinc-500 font-medium">
-                        {loading ? '...' : `${userData?.investments?.length || 0} ferme(s) active(s)`}
+                        {loading ? '...' : openBets === 0 ? 'Aucun pari en cours' : `${openBets} pari(s) en cours`}
                     </span>
                 </div>
 

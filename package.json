@@ -7,7 +7,15 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+
+    "//": "Les garde-fous (CHECK, triggers, vue) ne sont PAS dans schema.prisma : Prisma ne sait pas les declarer. Ils sont donc chaines a chaque commande qui touche la structure, pour qu'on ne puisse pas les oublier.",
+    "db:guardrails": "tsx prisma/scripts/apply-guardrails.ts",
+    "db:push": "prisma db push && npm run db:guardrails",
+    "db:migrate": "prisma migrate deploy && npm run db:guardrails",
+    "db:verify": "tsx prisma/scripts/check-guardrails.ts",
+    "db:seed": "tsx prisma/scripts/seed-fixtures.ts --commit",
+    "db:backfill": "tsx prisma/scripts/backfill-ledger.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.3.0",
@@ -41,6 +49,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }

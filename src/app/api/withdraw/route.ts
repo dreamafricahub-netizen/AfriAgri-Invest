@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
+import { getUserBalance, requestWithdrawal, LedgerError } from '@/lib/ledger';
 
 // Create withdrawal request
 export async function POST(req: Request) {
@@ -15,9 +16,7 @@ export async function POST(req: Request) {
         const user = await prisma.user.findUnique({
             where: { email: session.user.email },
             include: {
-                investments: {
-                    where: { status: 'ACTIVE' },
-                },
+                _count: { select: { bets: true } },
             },
         });
 
@@ -49,40 +48,57 @@ export async function POST(req: Request) {
             }, { status: 400 });
         }
 
-        // Check if user has invested (required before withdrawal)
-        if (user.investments.length === 0) {
+        // Au moins un pari place avant tout retrait.
+        //
+        // Ce n'est pas une contrainte commerciale mais une mesure LBC/FT :
+        // sans elle, un compte peut servir a faire entrer puis ressortir des
+        // fonds sans qu'aucun jeu n'ait lieu.
+        if (user._count.bets === 0) {
             return NextResponse.json({
-                message: 'Vous devez investir dans un pack avant de pouvoir retirer'
+                message: 'Vous devez avoir place au moins un pari avant de pouvoir retirer'
             }, { status: 400 });
         }
 
-        // Check if user has sufficient balance
-        if (user.balance < amount) {
+        // Le solde vient du registre. Le controle ci-dessous ne sert qu'au
+        // message : le decouvert est de toute facon interdit en base.
+        const available = await getUserBalance(user.id);
+        if (available < BigInt(Math.round(amount))) {
             return NextResponse.json({
-                message: `Solde insuffisant. Votre solde disponible est de ${user.balance.toLocaleString()} F`
+                message: `Solde insuffisant. Votre solde disponible est de ${Number(available).toLocaleString()} F`
             }, { status: 400 });
         }
 
-        // Deduct balance immediately and create pending withdrawal
-        await prisma.$transaction([
-            // Deduct from user balance
-            prisma.user.update({
-                where: { id: user.id },
-                data: { balance: { decrement: amount } },
-            }),
-            // Create withdrawal transaction
-            prisma.transaction.create({
-                data: {
-                    userId: user.id,
-                    type: 'WITHDRAW',
-                    amount: amount,
-                    method: method,
-                    status: 'PENDING',
-                    withdrawAddress: address,
-                    description: `Retrait vers ${method === 'USDT' ? 'USDT TRC20' : 'Mobile Money'}: ${address}`,
-                },
-            }),
-        ]);
+        // La demande cree d'abord la trace metier, puis immobilise les fonds :
+        // ils quittent le portefeuille sans quitter la plateforme.
+        const pendingTx = await prisma.transaction.create({
+            data: {
+                userId: user.id,
+                type: 'WITHDRAW',
+                amount: amount,
+                method: method,
+                status: 'PENDING',
+                withdrawAddress: address,
+                description: `Retrait vers ${method === 'USDT' ? 'USDT TRC20' : 'Mobile Money'}: ${address}`,
+            },
+        });
+
+        try {
+            await requestWithdrawal({
+                userId: user.id,
+                amountMinor: BigInt(Math.round(amount)),
+                requestRef: pendingTx.id,
+            });
+        } catch (err) {
+            // L'immobilisation a echoue : la demande ne doit pas subsister.
+            await prisma.transaction.update({
+                where: { id: pendingTx.id },
+                data: { status: 'FAILED' },
+            });
+            if (err instanceof LedgerError) {
+                return NextResponse.json({ message: err.message }, { status: 400 });
+            }
+            throw err;
+        }
 
         return NextResponse.json({
             success: true,

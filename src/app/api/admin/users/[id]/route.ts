@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
+import { creditFromExpense } from '@/lib/ledger';
 
 // Get single user with full details
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -26,8 +27,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         const user = await prisma.user.findUnique({
             where: { id },
             include: {
-                investments: {
-                    orderBy: { createdAt: 'desc' },
+                bets: {
+                    orderBy: { placedAt: 'desc' },
+                    take: 50,
+                    include: {
+                        selections: { select: { homeGoals: true, awayGoals: true } },
+                        fixture: { select: { homeTeam: true, awayTeam: true, kickoffAt: true } },
+                    },
                 },
                 transactions: {
                     orderBy: { createdAt: 'desc' },
@@ -43,21 +49,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                                 phone: true,
                                 city: true,
                                 balance: true,
-                                investedCapital: true,
                                 status: true,
-                                createdAt: true,
-                                referrals: {
-                                    include: {
-                                        referred: {
-                                            select: {
-                                                id: true,
-                                                name: true,
-                                                email: true,
-                                                investedCapital: true,
-                                            }
-                                        }
-                                    }
-                                }
+                                createdAt: true
                             }
                         }
                     }
@@ -69,26 +62,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             return NextResponse.json({ message: 'Utilisateur non trouve' }, { status: 404 });
         }
 
-        // Calculate team stats
+        // Parrainage : filleuls directs uniquement.
+        //
+        // Le suivi sur deux niveaux et le cumul des montants investis par
+        // l'equipe ont ete retires avec la commission indexee sur les depots.
+        // La recompense est desormais forfaitaire et versee une seule fois :
+        // il n'y a plus de « volume d'equipe » a mesurer.
         const directFilleuls = user.referrals.map(r => r.referred);
-        const directInvested = directFilleuls.reduce((sum, f) => sum + f.investedCapital, 0);
-
-        // Level 2 filleuls (filleuls of filleuls)
-        const level2Filleuls: any[] = [];
-        directFilleuls.forEach(f => {
-            f.referrals.forEach(r2 => {
-                level2Filleuls.push(r2.referred);
-            });
-        });
-        const level2Invested = level2Filleuls.reduce((sum, f) => sum + f.investedCapital, 0);
 
         const teamStats = {
             directFilleuls: directFilleuls.length,
-            directInvested,
-            level2Filleuls: level2Filleuls.length,
-            level2Invested,
-            totalTeamInvested: directInvested + level2Invested,
-            totalTeamMembers: directFilleuls.length + level2Filleuls.length,
+            rewardedReferrals: user.referrals.filter(r => r.totalBonus > 0).length,
+            totalReferralReward: user.referrals.reduce((sum, r) => sum + r.totalBonus, 0),
         };
 
         // Calculate user stats
@@ -120,7 +105,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 referralBonus,
             },
             filleuls: directFilleuls,
-            level2Filleuls,
         });
     } catch (error) {
         console.error('Admin user detail error:', error);
@@ -162,30 +146,41 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
         if (role) updateData.role = role;
         if (status) updateData.status = status;
-        if (balance !== undefined) updateData.balance = balance;
+
+        // Le solde n'est plus une valeur que l'on pose. Un administrateur ne
+        // peut pas ecraser un solde : il peut crediter, et ce credit s'inscrit
+        // en charge sur un compte nomme, attribuable a son auteur.
+        if (balance !== undefined) {
+            return NextResponse.json({
+                message:
+                    "Le solde ne peut pas etre fixe directement. Utilisez un credit " +
+                    "(addBalance), qui laisse une ecriture tracable au registre.",
+            }, { status: 400 });
+        }
 
         const updatedUser = await prisma.user.update({
             where: { id },
             data: updateData,
         });
 
-        // If adding balance, create a transaction
         if (addBalance && addBalance > 0) {
-            await prisma.$transaction([
-                prisma.user.update({
-                    where: { id },
-                    data: { balance: { increment: addBalance } }
-                }),
-                prisma.transaction.create({
-                    data: {
-                        userId: id,
-                        type: 'BONUS',
-                        amount: addBalance,
-                        status: 'COMPLETED',
-                        description: 'Bonus admin',
-                    }
-                })
-            ]);
+            const adjustmentTx = await prisma.transaction.create({
+                data: {
+                    userId: id,
+                    type: 'BONUS',
+                    amount: addBalance,
+                    status: 'COMPLETED',
+                    description: `Ajustement administratif par ${session.user.email}`,
+                }
+            });
+
+            await creditFromExpense({
+                userId: id,
+                amountMinor: BigInt(Math.round(addBalance)),
+                expenseLabel: 'ajustement_admin',
+                idempotencyKey: `admin_adjust:${adjustmentTx.id}`,
+                metadata: { userId: id, adminEmail: session.user.email, transactionId: adjustmentTx.id },
+            });
         }
 
         return NextResponse.json({ success: true, user: updatedUser });

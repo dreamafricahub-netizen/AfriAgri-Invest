@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Sprout, Leaf, Wallet, User } from 'lucide-react';
+import { Home, Target, Ticket, Wallet, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -11,8 +11,8 @@ export function Navbar() {
 
     const navItems = [
         { name: 'Accueil', href: '/', icon: Home },
-        { name: 'Investir', href: '/investir', icon: Sprout },
-        { name: 'Fermes', href: '/fermes', icon: Leaf },
+        { name: 'Parier', href: '/paris', icon: Target },
+        { name: 'Mes paris', href: '/mes-paris', icon: Ticket },
         { name: 'Portefeuille', href: '/portefeuille', icon: Wallet },
         { name: 'Profil', href: '/profil', icon: User },
     ];

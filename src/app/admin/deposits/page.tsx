@@ -11,7 +11,6 @@ import {
     ExternalLink,
     X
 } from 'lucide-react';
-import { PACKS } from '@/utils/packs';
 
 interface Deposit {
     id: string;
@@ -123,7 +122,8 @@ export default function AdminDepositsPage() {
             ) : (
                 <div className="space-y-4">
                     {deposits.map((deposit) => {
-                        const pack = deposit.packId ? PACKS.find(p => p.id === deposit.packId) : null;
+                        // Un depot n'est plus lie a un pack : il credite le
+                        // portefeuille pour le montant recu, librement.
                         return (
                             <div
                                 key={deposit.id}
@@ -151,11 +151,6 @@ export default function AdminDepositsPage() {
                                             </div>
                                             {deposit.reference && (
                                                 <p className="text-xs text-zinc-500 mt-1">Ref: {deposit.reference}</p>
-                                            )}
-                                            {pack && (
-                                                <p className="text-xs text-blue-400 mt-1">
-                                                    Pack: {pack.name} ({pack.price.toLocaleString()} F)
-                                                </p>
                                             )}
                                         </div>
                                     </div>
@@ -242,7 +237,7 @@ export default function AdminDepositsPage() {
                                     <div className="mt-4 p-3 bg-amber-900/20 border border-amber-800/50 rounded-xl text-amber-400 text-sm">
                                         <p className="font-bold mb-1">Verifiez bien avant de valider:</p>
                                         <ul className="list-disc list-inside text-xs space-y-1">
-                                            <li>Le montant correspond au pack selectionne ({pack?.price.toLocaleString()} F)</li>
+                                            <li>Le montant declare correspond bien au versement recu</li>
                                             <li>L'ID de transaction sur la capture est valide</li>
                                             <li>Le paiement a bien ete recu</li>
                                         </ul>

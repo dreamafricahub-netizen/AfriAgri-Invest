@@ -27,7 +27,6 @@ export async function GET() {
                                 name: true,
                                 city: true,
                                 createdAt: true,
-                                investedCapital: true,
                             },
                         },
                     },
@@ -43,23 +42,24 @@ export async function GET() {
             );
         }
 
-        // Format referrals data
+        // La recompense est forfaitaire et versee une seule fois, au premier
+        // depot du filleul. On n'expose plus ce qu'il a depose : ce montant ne
+        // determine plus rien, et le publier reinstallerait la logique de
+        // volume qu'on vient de retirer.
         const filleuls = user.referrals.map(r => ({
             id: r.referred.id,
             name: r.referred.name || 'Anonyme',
             initials: (r.referred.name || 'AN').substring(0, 2).toUpperCase(),
             city: r.referred.city || 'Non renseigne',
             joinedDate: r.referred.createdAt.toLocaleDateString('fr-FR'),
-            totalInvested: r.totalInvested,
             myBonus: r.totalBonus,
-            status: r.totalInvested > 0 ? 'active' : 'pending',
+            status: r.totalBonus > 0 ? 'rewarded' : 'pending',
         }));
 
         const stats = {
             totalFilleuls: filleuls.length,
-            activeFilleuls: filleuls.filter(f => f.status === 'active').length,
+            rewardedFilleuls: filleuls.filter(f => f.status === 'rewarded').length,
             totalBonus: filleuls.reduce((sum, f) => sum + f.myBonus, 0),
-            totalInvestedByFilleuls: filleuls.reduce((sum, f) => sum + f.totalInvested, 0),
         };
 
         return NextResponse.json({

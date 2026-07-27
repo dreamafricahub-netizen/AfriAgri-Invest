@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
-import { PACKS } from '@/utils/packs';
+import { recordDeposit, creditFromExpense } from '@/lib/ledger';
+
+/**
+ * Recompense de parrainage, en francs. Montant fixe, verse une seule fois.
+ * Volontairement decorrele du montant depose par le filleul.
+ */
+const REFERRAL_REWARD = 1000;
 
 export async function GET(req: Request) {
     try {
@@ -95,109 +101,69 @@ export async function PUT(req: Request) {
         }
 
         if (action === 'APPROVE') {
-            // Get pack info if packId exists
-            const pack = transaction.packId ? PACKS.find(p => p.id === transaction.packId) : null;
+            // Le depot credite le portefeuille, point. Il n'achete plus rien et
+            // ne declenche aucun rendement : le joueur decide ensuite de ce
+            // qu'il mise.
+            await recordDeposit({
+                userId: transaction.userId,
+                amountMinor: BigInt(Math.round(transaction.amount)),
+                provider: transaction.method === 'USDT' ? 'usdt' : 'momo',
+                providerRef: transaction.id,
+            });
 
-            // Mark deposit as completed
             await prisma.transaction.update({
                 where: { id: transactionId },
                 data: { status: 'COMPLETED' }
             });
 
-            if (pack) {
-                // Create investment for the user
-                // Set lastGainDate to 25 hours ago so harvest is available immediately
-                const yesterday = new Date(Date.now() - 25 * 60 * 60 * 1000);
-                await prisma.investment.create({
-                    data: {
-                        userId: transaction.userId,
-                        packId: pack.id,
-                        amount: pack.price,
-                        dailyRate: 0.035, // 3.5%
-                        status: 'ACTIVE',
-                        lastGainDate: yesterday,
-                    },
+            // Parrainage : recompense forfaitaire, versee une seule fois, au
+            // premier depot du filleul.
+            //
+            // Elle ne depend PAS du montant depose. Une commission indexee sur
+            // les depots recompense le recrutement plutot que l'usage, et
+            // pousse a faire deposer toujours plus : c'est le mecanisme qu'on
+            // retire.
+            if (transaction.user.referredBy) {
+                const sponsor = await prisma.user.findUnique({
+                    where: { referralCode: transaction.user.referredBy },
+                    select: { id: true },
                 });
 
-                // Update user's invested capital (not balance - the deposit amount goes to investment)
-                await prisma.user.update({
-                    where: { id: transaction.userId },
-                    data: {
-                        investedCapital: {
-                            increment: pack.price,
-                        },
-                        // Add any bonus to balance (for USDT deposits, transaction.amount includes the bonus)
-                        balance: {
-                            increment: transaction.amount - pack.price, // The bonus part goes to balance
-                        },
-                    },
-                });
+                const link = sponsor
+                    ? await prisma.referral.findFirst({
+                        where: { sponsorId: sponsor.id, referredId: transaction.userId },
+                        select: { id: true, totalBonus: true },
+                    })
+                    : null;
 
-                // Create investment transaction record
-                await prisma.transaction.create({
-                    data: {
-                        userId: transaction.userId,
-                        type: 'INVESTMENT',
-                        amount: pack.price,
-                        status: 'COMPLETED',
-                        description: `Investissement - ${pack.name}`,
-                    },
-                });
+                if (sponsor && link && link.totalBonus === 0) {
+                    const reward = REFERRAL_REWARD;
 
-                // Handle referral bonus (10% to sponsor)
-                if (transaction.user.referredBy) {
-                    const sponsor = await prisma.user.findUnique({
-                        where: { referralCode: transaction.user.referredBy },
+                    await creditFromExpense({
+                        userId: sponsor.id,
+                        amountMinor: BigInt(reward),
+                        expenseLabel: 'parrainage',
+                        idempotencyKey: `referral:${link.id}`,
+                        metadata: { sponsorId: sponsor.id, referredId: transaction.userId },
                     });
 
-                    if (sponsor) {
-                        const bonus = Math.floor(pack.price * 0.10); // 10% bonus
+                    await prisma.referral.update({
+                        where: { id: link.id },
+                        data: { totalBonus: reward },
+                    });
 
-                        // Update sponsor balance
-                        await prisma.user.update({
-                            where: { id: sponsor.id },
-                            data: {
-                                balance: {
-                                    increment: bonus,
-                                },
-                            },
-                        });
-
-                        // Update referral stats
-                        await prisma.referral.updateMany({
-                            where: {
-                                sponsorId: sponsor.id,
-                                referredId: transaction.userId,
-                            },
-                            data: {
-                                totalInvested: {
-                                    increment: pack.price,
-                                },
-                                totalBonus: {
-                                    increment: bonus,
-                                },
-                            },
-                        });
-
-                        // Create bonus transaction for sponsor
-                        await prisma.transaction.create({
-                            data: {
-                                userId: sponsor.id,
-                                type: 'REFERRAL_BONUS',
-                                amount: bonus,
-                                status: 'COMPLETED',
-                                description: `Bonus parrainage de ${transaction.user.name || 'un filleul'}`,
-                            },
-                        });
-                    }
+                    await prisma.transaction.create({
+                        data: {
+                            userId: sponsor.id,
+                            type: 'REFERRAL_BONUS',
+                            amount: reward,
+                            status: 'COMPLETED',
+                            description: `Parrainage de ${transaction.user.name || 'un filleul'}`,
+                        },
+                    });
                 }
-            } else {
-                // No pack - just credit the balance (for regular deposits)
-                await prisma.user.update({
-                    where: { id: transaction.userId },
-                    data: { balance: { increment: transaction.amount } }
-                });
             }
+
         } else {
             // Mark as failed
             await prisma.transaction.update({

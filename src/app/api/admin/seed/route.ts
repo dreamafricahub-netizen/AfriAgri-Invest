@@ -39,7 +39,6 @@ export async function GET() {
                     role: 'ADMIN',
                     status: 'ACTIVE',
                     balance: 0,
-                    investedCapital: 0,
                     referralCode: 'ADMIN001',
                 }
             });

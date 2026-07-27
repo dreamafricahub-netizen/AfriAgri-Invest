@@ -19,30 +19,186 @@ model User {
   city            String?
   role            String    @default("USER") // USER, ADMIN
   status          String    @default("ACTIVE") // ACTIVE, BANNED, SUSPENDED
-  balance         Float     @default(3000) // Welcome bonus
-  investedCapital Float     @default(0)
+  // Conservee pour la reprise historique uniquement. Le solde de reference est
+  // calcule depuis le registre (getUserBalance). Ne plus ecrire ici.
+  balance         Float     @default(0)
   referralCode    String    @unique
   referredBy      String?   // referralCode of the person who referred this user
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  investments   Investment[]
   transactions  Transaction[]
   referrals     Referral[]    @relation("Sponsor")
   referredUser  Referral?     @relation("Referred")
+  accounts      Account[]
+  bets          Bet[]
 }
 
-model Investment {
-  id            String    @id @default(cuid())
-  userId        String
-  packId        Int       // ID from our static packs
-  amount        Float
-  dailyRate     Float     // e.g., 0.035 for 3.5%
-  createdAt     DateTime  @default(now())
-  lastGainDate  DateTime  @default(now())
-  status        String    @default("ACTIVE") // ACTIVE, COMPLETED
+// ---------------------------------------------------------------------------
+// Registre en partie double
+//
+// Remplace la colonne User.balance, modifiable par increment.
+// Regles structurelles, appliquees par la base et non par le code applicatif :
+//   1. Un solde n'est jamais une colonne : il se calcule depuis les ecritures.
+//   2. Toute transaction porte au moins deux ecritures dont la somme vaut zero.
+//   3. Les montants sont des entiers (BigInt). Le XOF n'a pas de sous-unite :
+//      l'unite de stockage est le franc.
+//   4. Les ecritures sont immuables. Une erreur se corrige par contrepassation.
+// ---------------------------------------------------------------------------
 
-  user          User      @relation(fields: [userId], references: [id])
+enum AccountKind {
+  USER_WALLET      // Passif  — ce que la plateforme doit a l'utilisateur
+  PENDING_PAYOUT   // Passif  — retraits demandes, pas encore verses
+  UNSETTLED_BETS   // Passif  — mises engagees, resultat inconnu
+  PSP_FLOAT        // Actif   — encaisse detenue chez un prestataire de paiement
+  BANK             // Actif   — tresorerie propre
+  REVENUE          // Produit — resultats constates, disponibles a distribution
+  EXPENSE          // Charge  — frais, bonus, commissions
+  ROUNDING         // Ecart   — reliquats d'arrondi au franc
+  OPENING_BALANCE  // Capitaux — contrepartie de la reprise des soldes existants
+}
+
+model Account {
+  id        String      @id @default(cuid())
+  kind      AccountKind
+  currency  String      @default("XOF")
+  userId    String?
+  label     String?
+  createdAt DateTime    @default(now())
+
+  user    User?         @relation(fields: [userId], references: [id])
+  entries LedgerEntry[]
+
+  @@unique([kind, currency, userId, label])
+  @@index([userId])
+}
+
+model LedgerTransaction {
+  id             String   @id @default(cuid())
+  type           String   // deposit, withdrawal, investment, revenue_booking, reversal...
+  idempotencyKey String   @unique
+  reversesId     String?
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  entries    LedgerEntry[]
+  reverses   LedgerTransaction?  @relation("Reversal", fields: [reversesId], references: [id])
+  reversedBy LedgerTransaction[] @relation("Reversal")
+
+  @@index([type, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Paris
+//
+// Le pari inverse : l'utilisateur ecarte un ou plusieurs scores exacts. Il
+// gagne si aucun d'eux ne tombe. La cote monte avec le nombre de scores
+// ecartes — un seul score donne 1,04, quatre scores courants depassent 1,55.
+//
+// Aucun montant en Float. Les cotes sont stockees en milliemes (1,55 => 1550)
+// et les taux en points de base (60 % => 6000).
+// ---------------------------------------------------------------------------
+
+enum FixtureKind {
+  REAL     // match reel, resultat importe d'un fournisseur
+  VIRTUAL  // match simule, resultat tire par le moteur
+}
+
+enum FixtureStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  CANCELLED
+}
+
+enum BetStatus {
+  OPEN
+  WON
+  LOST
+  VOID  // match annule : mise rendue integralement
+}
+
+model Fixture {
+  id          String        @id @default(cuid())
+  kind        FixtureKind
+  competition String
+  homeTeam    String
+  awayTeam    String
+  kickoffAt   DateTime
+  status      FixtureStatus @default(SCHEDULED)
+
+  // Parametres du modele de cote : esperance de buts de chaque equipe.
+  // Ils figent la grille de probabilites au moment de l'ouverture du marche.
+  lambdaHome Float
+  lambdaAway Float
+
+  homeGoals Int?
+  awayGoals Int?
+  settledAt DateTime?
+
+  // Tirage scelle — matchs virtuels uniquement.
+  //
+  // La graine est tiree a l'ouverture du marche, avant toute mise. Seule son
+  // empreinte est publiee. Elle est revelee au coup de sifflet final, et
+  // n'importe qui peut alors verifier que le score annonce en decoule et que
+  // l'empreinte correspond. Le resultat ne peut donc pas dependre de
+  // l'exposition du livre au moment du tirage.
+  resultSeed       String? // revele au reglement
+  resultCommitment String? // sha256(resultSeed), publie des l'ouverture
+
+  createdAt DateTime @default(now())
+  bets      Bet[]
+
+  @@index([status, kickoffAt])
+  @@index([kind, kickoffAt])
+}
+
+model Bet {
+  id        String @id @default(cuid())
+  userId    String
+  fixtureId String
+
+  stakeMinor        BigInt
+  oddsMilli         Int    // cote x 1000
+  potentialWinMinor BigInt // mise x cote, arrondi au franc
+  cashbackRateBp    Int    @default(0) // remboursement en points de base, desactive par defaut
+
+  status    BetStatus @default(OPEN)
+  placedAt  DateTime  @default(now())
+  settledAt DateTime?
+
+  user       User           @relation(fields: [userId], references: [id])
+  fixture    Fixture        @relation(fields: [fixtureId], references: [id])
+  selections BetSelection[]
+
+  @@index([userId, placedAt])
+  @@index([fixtureId, status])
+}
+
+/** Un score exact ecarte par le parieur. */
+model BetSelection {
+  id        String @id @default(cuid())
+  betId     String
+  homeGoals Int
+  awayGoals Int
+
+  bet Bet @relation(fields: [betId], references: [id], onDelete: Cascade)
+
+  @@unique([betId, homeGoals, awayGoals])
+}
+
+model LedgerEntry {
+  id            String @id @default(cuid())
+  transactionId String
+  accountId     String
+  amountMinor   BigInt // debit > 0, credit < 0 — somme nulle par transaction
+  currency      String @default("XOF")
+
+  transaction LedgerTransaction @relation(fields: [transactionId], references: [id])
+  account     Account           @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, id])
+  @@index([transactionId])
 }
 
 model Transaction {

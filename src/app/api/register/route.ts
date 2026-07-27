@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { creditFromExpense } from '@/lib/ledger';
+
+/** Bonus d'acquisition, en francs. Valeur unique, utilisee partout. */
+const WELCOME_BONUS = 3000;
 
 // Generate a unique referral code
 function generateReferralCode(name: string): string {
@@ -58,11 +62,20 @@ export async function POST(req: Request) {
                 password: hashedPassword,
                 name: name || '',
                 phone: phone || '',
-                balance: 3000, // Welcome bonus
-                investedCapital: 0,
+                balance: 0, // Le bonus est ecrit au registre, pas pose ici
                 referralCode,
                 referredBy: sponsor ? referredBy : null,
             },
+        });
+
+        // Bonus de bienvenue : credit legitime, mais c'est une charge
+        // d'acquisition. Elle est nommee et son cout cumule est mesurable.
+        await creditFromExpense({
+            userId: user.id,
+            amountMinor: BigInt(WELCOME_BONUS),
+            expenseLabel: 'bonus_bienvenue',
+            idempotencyKey: `welcome:${user.id}`,
+            metadata: { userId: user.id, referredBy: sponsor ? referredBy : null },
         });
 
         // If user was referred, create the referral relationship
@@ -82,7 +95,7 @@ export async function POST(req: Request) {
             data: {
                 userId: user.id,
                 type: 'BONUS',
-                amount: 3000,
+                amount: WELCOME_BONUS,
                 status: 'COMPLETED',
                 description: 'Bonus de bienvenue',
             },

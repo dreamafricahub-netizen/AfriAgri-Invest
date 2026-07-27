@@ -18,25 +18,20 @@ import {
 interface Stats {
     totalUsers: number;
     newUsersToday: number;
-    totalInvestments: number;
+    totalBets: number;
     totalTransactions: number;
     pendingWithdrawals: number;
     totalBalance: number;
-    totalInvestedCapital: number;
-    totalGainsPaid: number;
-    investmentsTodayCount: number;
-    investmentsTodayAmount: number;
+    openExposure: number;
+    grossGamingRevenue: number;
+    betsTodayCount: number;
+    stakedToday: number;
 }
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [processingGains, setProcessingGains] = useState(false);
-    const [gainsResult, setGainsResult] = useState<{ processed: number; amount: number } | null>(null);
-    const [gainsError, setGainsError] = useState<string | null>(null);
-    const [resettingFarms, setResettingFarms] = useState(false);
-    const [resetResult, setResetResult] = useState<string | null>(null);
 
     const fetchStats = async () => {
         try {
@@ -60,44 +55,7 @@ export default function AdminDashboard() {
         fetchStats();
     };
 
-    const handleProcessGains = async () => {
-        setProcessingGains(true);
-        setGainsResult(null);
-        setGainsError(null);
-        try {
-            const res = await fetch('/api/cron/daily-gains', { method: 'POST' });
-            const data = await res.json();
-            if (res.ok) {
-                setGainsResult({
-                    processed: data.processedInvestments,
-                    amount: data.totalGainsDistributed
-                });
-                fetchStats();
-            } else {
-                setGainsError(data.message || `Erreur ${res.status}`);
-            }
-        } catch (error) {
-            setGainsError('Erreur de connexion au serveur');
-        } finally {
-            setProcessingGains(false);
-        }
-    };
 
-    const handleResetFarms = async () => {
-        setResettingFarms(true);
-        setResetResult(null);
-        try {
-            const res = await fetch('/api/admin/reset-farms', { method: 'POST' });
-            const data = await res.json();
-            if (res.ok) {
-                setResetResult(data.message);
-            }
-        } catch (error) {
-            console.error('Failed to reset farms:', error);
-        } finally {
-            setResettingFarms(false);
-        }
-    };
 
     if (loading) {
         return (
@@ -135,16 +93,16 @@ export default function AdminDashboard() {
                     color="blue"
                 />
                 <StatCard
-                    title="Capital Total"
-                    value={`${(stats?.totalInvestedCapital || 0).toLocaleString()} F`}
-                    subtitle={`${stats?.totalInvestments || 0} investissements`}
+                    title="Exposition ouverte"
+                    value={`${(stats?.openExposure || 0).toLocaleString()} F`}
+                    subtitle={`${stats?.totalBets || 0} paris`}
                     icon={TrendingUp}
                     color="green"
                 />
                 <StatCard
                     title="Solde Total"
                     value={`${(stats?.totalBalance || 0).toLocaleString()} F`}
-                    subtitle="Disponible pour retrait"
+                    subtitle="Soldes joueurs"
                     icon={DollarSign}
                     color="amber"
                 />
@@ -178,8 +136,8 @@ export default function AdminDashboard() {
                             <TrendingUp className="w-5 h-5 text-green-400" />
                         </div>
                         <div>
-                            <p className="text-zinc-400 text-sm">Gains distribues</p>
-                            <p className="text-xl font-bold text-white">{(stats?.totalGainsPaid || 0).toLocaleString()} F</p>
+                            <p className="text-zinc-400 text-sm">Produit brut des jeux</p>
+                            <p className="text-xl font-bold text-white">{(stats?.grossGamingRevenue || 0).toLocaleString()} F</p>
                         </div>
                     </div>
                 </div>
@@ -190,77 +148,13 @@ export default function AdminDashboard() {
                             <UserPlus className="w-5 h-5 text-blue-400" />
                         </div>
                         <div>
-                            <p className="text-zinc-400 text-sm">Investissements aujourd'hui</p>
+                            <p className="text-zinc-400 text-sm">Paris aujourd'hui</p>
                             <p className="text-xl font-bold text-white">
-                                {stats?.investmentsTodayCount || 0} ({(stats?.investmentsTodayAmount || 0).toLocaleString()} F)
+                                {stats?.betsTodayCount || 0} ({(stats?.stakedToday || 0).toLocaleString()} F)
                             </p>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            {/* Process Daily Gains */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-lg font-bold text-white">Gains Journaliers</h2>
-                        <p className="text-zinc-400 text-sm">Crediter les gains des investissements actifs</p>
-                    </div>
-                    <button
-                        onClick={handleProcessGains}
-                        disabled={processingGains}
-                        className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50"
-                    >
-                        {processingGains ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                            <Play className="w-5 h-5" />
-                        )}
-                        Distribuer les gains
-                    </button>
-                </div>
-                {gainsResult && (
-                    <div className="mt-4 p-4 bg-green-900/20 border border-green-800 rounded-xl flex items-center gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-400" />
-                        <div>
-                            <p className="text-green-400 font-bold">Gains distribues avec succes!</p>
-                            <p className="text-green-300 text-sm">
-                                {gainsResult.processed} investissement(s) traite(s) - {gainsResult.amount.toLocaleString()} F distribues
-                            </p>
-                        </div>
-                    </div>
-                )}
-                {gainsError && (
-                    <div className="mt-4 p-4 bg-red-900/20 border border-red-800 rounded-xl flex items-center gap-3">
-                        <Activity className="w-5 h-5 text-red-400" />
-                        <p className="text-red-400 font-medium">{gainsError}</p>
-                    </div>
-                )}
-
-                {/* Reset Farms Button */}
-                <div className="mt-4 pt-4 border-t border-zinc-700 flex items-center justify-between">
-                    <div>
-                        <p className="text-sm text-zinc-400">Reinitialiser les fermes</p>
-                        <p className="text-xs text-zinc-500">Rendre toutes les fermes prates a recolter</p>
-                    </div>
-                    <button
-                        onClick={handleResetFarms}
-                        disabled={resettingFarms}
-                        className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
-                    >
-                        {resettingFarms ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <RefreshCw className="w-4 h-4" />
-                        )}
-                        Reinitialiser
-                    </button>
-                </div>
-                {resetResult && (
-                    <div className="mt-2 p-3 bg-amber-900/20 border border-amber-800 rounded-xl">
-                        <p className="text-amber-400 text-sm">{resetResult}</p>
-                    </div>
-                )}
             </div>
 
             {/* Quick Actions */}
@@ -284,7 +178,7 @@ export default function AdminDashboard() {
                     <a href="/admin/investments" className="p-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-center transition-colors">
                         <TrendingUp className="w-6 h-6 text-green-400 mx-auto mb-2" />
                         <p className="text-sm text-white font-medium">Investissements</p>
-                        <span className="text-xs text-zinc-500">{stats?.totalInvestments || 0} actifs</span>
+                        <span className="text-xs text-zinc-500">{stats?.totalBets || 0} paris</span>
                     </a>
                     <a href="/admin/transactions" className="p-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-center transition-colors">
                         <CreditCard className="w-6 h-6 text-amber-400 mx-auto mb-2" />
